@@ -952,10 +952,9 @@ fn has_play_url(info: &Value) -> bool {
         .is_some_and(|s| !s.trim().is_empty())
 }
 
-#[tauri::command]
-pub async fn api_play(state: State<'_, Api>, id: i64, ep: u32) -> Result<Value, String> {
+pub(crate) async fn resolve_play_info(api: &Api, id: i64, ep: u32) -> Result<Value, String> {
     // 优先走新接口；失败或没有可用地址时退回旧接口，两者都不行就返回新接口的结果/错误。
-    let primary = state
+    let primary = api
         .post(
             &format!("/api/videos/{id}/episodes/{ep}/playback"),
             Some(json!({})),
@@ -970,7 +969,7 @@ pub async fn api_play(state: State<'_, Api>, id: i64, ep: u32) -> Result<Value, 
             return primary;
         }
     }
-    match state
+    match api
         .get(&format!("/api/videos/{id}/play?ep={ep}&page_texts=0"))
         .await
     {
@@ -984,6 +983,11 @@ pub async fn api_play(state: State<'_, Api>, id: i64, ep: u32) -> Result<Value, 
         }
         Err(_) => primary,
     }
+}
+
+#[tauri::command]
+pub async fn api_play(state: State<'_, Api>, id: i64, ep: u32) -> Result<Value, String> {
+    resolve_play_info(&state, id, ep).await
 }
 
 /* ───────────────────────── 评论 / 互动 ───────────────────────── */

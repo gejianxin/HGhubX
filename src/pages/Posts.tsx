@@ -8,7 +8,9 @@ import { useStore } from "../store";
 import { copyText } from "../clipboard";
 import { Empty, Img } from "../components/ui";
 import Player from "../components/Player";
-import { IBack, IFireF, IPlayF, ISearch } from "../icons";
+import DownloadSheet from "../components/DownloadSheet";
+import { downloadProgressPct, findTaskByUrl, startDownload, useDownloads } from "../downloads";
+import { IBack, IDownload, IFireF, IPlayF, ISearch } from "../icons";
 import { handleArticleClick, sanitizeHtml } from "../html";
 import { InplaceSearch } from "../components/InplaceSearch";
 import { FilteredContent } from "../components/FilteredContent";
@@ -147,6 +149,31 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
   const scrollRef = useRef<HTMLDivElement>(null);
   const content = post?.content || "";
   const src = segs[seg] || "";
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
+  const currentDownload = findTaskByUrl(downloadTasks, src);
+  const currentDownloadActive = currentDownload?.status === "queued" || currentDownload?.status === "downloading";
+  const currentDownloadDone = currentDownload?.status === "done";
+  const downloadLabel = currentDownloadActive && currentDownload
+    ? `${downloadProgressPct(currentDownload)}%`
+    : currentDownloadDone ? "已下载" : "下载";
+  const onDownload = () => {
+    if (currentDownloadActive || currentDownloadDone) {
+      setDownloadOpen(true);
+      return;
+    }
+    if (!src) {
+      toast("暂无可下载视频", "info");
+      return;
+    }
+    void startDownload({
+      url: src,
+      title: currentPost?.title || `帖子 ${id}`,
+      subtitle: segs.length > 1 ? `分段 ${seg + 1}` : undefined,
+    })
+      .then(() => toast("已开始下载，点击按钮可查看进度", "ok"))
+      .catch((e) => toast(e instanceof Error ? e.message : "启动下载失败", "info"));
+  };
   const safeHtml = useMemo(() => sanitizeHtml(content), [content, strictSecurity]);
   const openSafeLink = (url: string) => {
     api.openUrl(url).catch(() => {
@@ -202,7 +229,16 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
       <div className="shrink-0 flex items-center gap-2 px-2 bg-s1" style={{ paddingTop: isMobile ? "var(--sat, 0px)" : 0, height: isMobile ? "calc(44px + var(--sat, 0px))" : 44 }}>
         <Button aria-label="返回" onClick={onBack} className="w-9 h-9 rounded-full flex items-center justify-center text-on hover:bg-s3 pressable"><IBack size={19} /></Button>
         <span className="text-[14px] font-semibold text-on">吃瓜详情</span>
-        <Button disabled={!currentPost} onClick={() => { if (active && allowed) setTagMenu(true); }} className="ml-auto px-3 text-[13px]">不感兴趣</Button>
+        <div className="ml-auto flex items-center gap-1">
+          {src && (
+            <Button onClick={onDownload} aria-label={downloadLabel}
+              className="px-2.5 h-8 rounded-full inline-flex items-center gap-1 text-[13px] text-on hover:bg-s3 pressable tabular-nums">
+              <IDownload size={15} className={currentDownloadActive || currentDownloadDone ? "text-primary" : undefined} />
+              <span>{downloadLabel}</span>
+            </Button>
+          )}
+          <Button disabled={!currentPost} onClick={() => { if (active && allowed) setTagMenu(true); }} className="px-3 text-[13px]">不感兴趣</Button>
+        </div>
       </div>
 
       <div role="progressbar" aria-label="阅读进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readProgress} className="h-1 shrink-0 bg-s3 overflow-hidden"><div className="h-full bg-primary" style={{ width: `${readProgress}%` }} /></div>
@@ -274,6 +310,7 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
         )}
       </div>
       <TagBlockMenu open={tagMenu && active} tags={currentPost?.tags || []} onClose={() => setTagMenu(false)} onSettings={() => push({ kind: "settings", section: "内容偏好" })} />
+      <DownloadSheet open={downloadOpen && active} onClose={() => setDownloadOpen(false)} />
     </div>
   );
 }

@@ -14,7 +14,9 @@ import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePla
 import { formatNetDiag, shortVerdict } from "../netDiagReport";
 import { copyText } from "../clipboard";
 import { Loader } from "../components/ios/effects";
-import { IBack, IBoltF, IBroom, IChevR, IHeart, IInfo, ILink, ILockF, IMoon, IRefresh, ISun, IVolMute } from "../icons";
+import DownloadSheet from "../components/DownloadSheet";
+import { useDownloads } from "../downloads";
+import { IBack, IBoltF, IBroom, IChevR, IDownload, IHeart, IInfo, ILink, ILockF, IMoon, IRefresh, ISun, IVolMute } from "../icons";
 
 const SETTING_GROUPS = ["外观", "播放", "内容偏好", "本地数据", "网络", "播放诊断", "其他"] as const;
 type SettingGroup = typeof SETTING_GROUPS[number];
@@ -22,7 +24,7 @@ const GROUP_SUMMARIES: Record<SettingGroup, string> = {
   外观: "跟随系统、浅色与深色",
   播放: "启动静音与画质偏好",
   内容偏好: "标签屏蔽与内容显示",
-  本地数据: "收藏、观看记录与缓存",
+  本地数据: "收藏、下载管理、观看记录与缓存",
   网络: "代理、线路与连接诊断",
   播放诊断: "详细日志与问题排查",
   其他: "检查更新、使用协议与关于应用",
@@ -35,6 +37,8 @@ export default function Settings({ onBack, initialSection }: { onBack: () => voi
   const [about, setAbout] = useState(false);
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
   const [lineOpen, setLineOpen] = useState(false);
   const [lineBase, setLineBase] = useState("");
   const [autoLineOn, setAutoLineOn] = useState(autoLineEnabled);
@@ -175,6 +179,18 @@ export default function Settings({ onBack, initialSection }: { onBack: () => voi
                 <div className="text-[12px] text-mut">{favs.length} 部收藏 · {history.length} 条观看记录</div>
               </div>
             </div>
+            <Button onClick={() => setDownloadOpen(true)} className="w-full flex items-center gap-3 px-3.5 py-3 text-left pressable">
+              <span className="ios-setting-icon"><IDownload size={16} /></span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] text-on">下载管理</div>
+                <div className="text-[12px] text-mut truncate">
+                  {downloadTasks.length > 0
+                    ? `${downloadTasks.filter((t) => t.status === "downloading" || t.status === "queued").length} 进行中 · ${downloadTasks.filter((t) => t.status === "done").length} 已完成`
+                    : "查看本地视频下载进度与保存位置"}
+                </div>
+              </div>
+              <IChevR size={15} className="text-mut" />
+            </Button>
             <Button onClick={() => { setClearError(""); setClearOpen(true); }} className="w-full flex items-center gap-3 px-3.5 py-3 text-left pressable">
               <span className="ios-setting-icon"><IBroom size={16} /></span>
               <div className="flex-1">
@@ -451,6 +467,7 @@ export default function Settings({ onBack, initialSection }: { onBack: () => voi
           <details className="text-[12px] text-mut mt-2.5"><summary className="py-3 cursor-pointer">下载地址</summary><p className="break-all select-text">{update?.url}</p></details>
         </div>
       </Modal>
+      <DownloadSheet open={downloadOpen} onClose={() => setDownloadOpen(false)} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ mod api;
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
 mod apple_proxy;
 mod cache;
+mod download;
 mod env;
 #[cfg(target_os = "ios")]
 mod ios_layout;
@@ -275,6 +276,14 @@ pub fn run() {
             api::api_like,
             api::api_collect,
             api::api_follow,
+            download::download_start,
+            download::download_series,
+            download::download_cancel,
+            download::download_cancel_all,
+            download::download_list,
+            download::download_remove,
+            download::download_dir,
+            download::download_open_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -212,6 +212,37 @@ export const api = {
   /* 更新检查：对比 GitHub Release 的 tag */
   checkUpdate: () => call<UpdateInfo>("check_update"),
   openUrl: (url: string) => call<void>("open_url", { url }),
+
+  /* 视频下载：HLS (.m3u8) 分片拉取、AES-128 解密合并与直链下载 */
+  downloadStart: (url: string, title: string, subtitle?: string) =>
+    call<DownloadTask>("download_start", { url, title, subtitle: subtitle ?? null }),
+  downloadSeries: (videoId: number, title: string, episodes: number[], preferHevc = false) =>
+    call<DownloadTask[]>("download_series", { videoId, title, episodes, preferHevc }),
+  downloadCancel: (id: string) => call<boolean>("download_cancel", { id }),
+  downloadCancelAll: () => call<number>("download_cancel_all"),
+  downloadList: () => call<DownloadTask[]>("download_list"),
+  downloadRemove: (id: string) => call<boolean>("download_remove", { id }),
+  downloadDir: () => call<string>("download_dir"),
+  downloadOpenDir: () => call<void>("download_open_dir"),
+};
+
+export type DownloadStatus = "queued" | "downloading" | "done" | "error" | "cancelled";
+
+export type DownloadTask = {
+  id: string;
+  url: string;
+  title: string;
+  subtitle: string;
+  status: DownloadStatus;
+  doneSegments: number;
+  totalSegments: number;
+  bytes: number;
+  filePath: string;
+  error?: string | null;
+  createdAt: number;
+  videoId?: number;
+  episode?: number;
+  preferHevc?: boolean;
 };
 
 /* ── 更新检查 ───────────────────────────────────────────── */

@@ -22,8 +22,10 @@ import { PreferenceStorageNotice } from "./PreferenceStorageNotice";
 import MobileHoldGuide from "./MobileHoldGuide";
 import { getHoldZone, HOLD_DELAY_MS, HOLD_LOCK_DISTANCE, type HoldZone } from "../mobileHold";
 import { useMobileHoldGuide } from "../useMobileHoldGuide";
+import DownloadSheet from "./DownloadSheet";
+import { downloadProgressPct, findTaskByUrl, startDownload, startSeriesDownload, useDownloads } from "../downloads";
 import {
-  IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF, IMore,
+  IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IDownload, IExpand, IFileText, IHeart, IHeartF, IMore,
   ILink, IList, ILockF, IPauseF, IPlayF, ISearch, IStar, IStarF, IVertSwap, IVol, IVolMute,
 } from "../icons";
 
@@ -338,6 +340,61 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const shareLink = () => {
     const u = kind === "post" ? (posts[curId]?.video_url || meta.title) : `https://huangguoai.com/video/${curId}/`;
     copyText(u).then(() => toast("链接已复制", "ok")).catch(() => toast("复制失败", "info"));
+  };
+
+  /* 下载当前视频 */
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
+  const currentDownload = findTaskByUrl(downloadTasks, playUrl);
+  const currentDownloadActive = currentDownload?.status === "queued" || currentDownload?.status === "downloading";
+  const currentDownloadDone = currentDownload?.status === "done";
+  const currentDownloadLabel = currentDownloadActive && currentDownload
+    ? `${downloadProgressPct(currentDownload)}%`
+    : currentDownloadDone ? "已下载" : "下载";
+  const onDownload = () => {
+    if (currentDownloadActive || currentDownloadDone) {
+      setDownloadOpen(true);
+      return;
+    }
+    if (!playUrl) {
+      toast("视频地址尚未加载完成，请稍候重试", "info");
+      return;
+    }
+    const epTag = episodes.length > 1 ? `第 ${curEp} 集` : "";
+    const hdTag = preferHevc && hevcUrl ? "HD" : "";
+    const subtitle = [epTag, hdTag].filter(Boolean).join(" ");
+    void startDownload({
+      url: playUrl,
+      title: meta.title || `视频 ${curId}`,
+      subtitle: subtitle || undefined,
+    })
+      .then(() => {
+        toast("已开始下载，点击下载按钮可查看进度", "ok");
+      })
+      .catch((e) => {
+        toast(e instanceof Error ? e.message : "启动下载失败", "info");
+      });
+  };
+  const onDownloadSeries = () => {
+    const epNums = episodes.map((e) => e.ep_num).filter((n) => n > 0);
+    if (!curId || !epNums.length) {
+      toast("暂无可下载的剧集", "info");
+      return;
+    }
+    void startSeriesDownload({
+      videoId: curId,
+      title: meta.title || `视频 ${curId}`,
+      episodes: epNums,
+      preferHevc,
+    })
+      .then((tasks) => {
+        toast(`已将全套 ${tasks.length} 集加入下载队列`, "ok");
+        setPanel(null);
+        setDownloadOpen(true);
+      })
+      .catch((e) => {
+        toast(e instanceof Error ? e.message : "全集下载启动失败", "info");
+      });
   };
 
   /* 倍速：中心小方块打开偏好，外侧右上 2.0x / 左下 0.5x。 */
@@ -1317,6 +1374,10 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                     <IExpand size={26} className="hg-ink hg-ov-shadow" />
                     <span className="text-[12px] hg-ink-2 hg-ov-shadow">全屏</span>
                   </Button>
+                  <Button onClick={onDownload} className="flex flex-col items-center gap-1 pressable" aria-label={currentDownloadLabel}>
+                    <IDownload size={25} className={currentDownloadDone || currentDownloadActive ? "hg-gold hg-ov-shadow" : "hg-ink hg-ov-shadow"} />
+                    <span className="text-[12px] hg-ink-2 hg-ov-shadow tabular-nums" style={{ color: currentDownloadDone || currentDownloadActive ? "#f3c969" : undefined }}>{currentDownloadLabel}</span>
+                  </Button>
                   <Button onClick={shareLink} className="flex flex-col items-center gap-1 pressable" aria-label="分享">
                     <ILink size={25} className="hg-ink hg-ov-shadow" />
                     <span className="text-[12px] hg-ink-2 hg-ov-shadow">分享</span>
@@ -1362,6 +1423,11 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                     </Button>
                   </>
                 )}
+
+                <Button onClick={onDownload} aria-label={currentDownloadLabel} className="flex flex-col items-center gap-1 pressable">
+                  <IDownload size={25} className={currentDownloadDone || currentDownloadActive ? "hg-gold tsh" : "text-white tsh"} />
+                  <span className="text-[12px] text-white/90 tabular-nums" style={{ color: currentDownloadDone || currentDownloadActive ? "#f3c969" : undefined }}>{currentDownloadLabel}</span>
+                </Button>
 
                 <Button onClick={shareLink} aria-label="分享" className="flex flex-col items-center gap-1 pressable">
                   <ILink size={25} className="text-white tsh" />
@@ -1610,7 +1676,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
         <div className={`desktop-dock-panel ${panel ? "is-open" : ""}`}>
           <div className="desktop-dock-inner">
             {panel === "detail" ? detailBody(() => setPanel(null)) : panel === "episodes" ? (
-              <EpisodesPanel videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onClose={() => setPanel(null)} />
+              <EpisodesPanel videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onDownloadAll={onDownloadSeries} onClose={() => setPanel(null)} />
             ) : panel === "comments" ? (
               <CommentsPanel videoId={curId} ep={curEp} total={meta.comment} kind={kind} onClose={() => setPanel(null)} />
             ) : null}
@@ -1649,7 +1715,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
 
               <div className="flex-1 min-h-0">
                 {panel === "episodes" ? (
-                  <EpisodesPanel bare videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onClose={() => setPanel(null)} />
+                  <EpisodesPanel bare videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onDownloadAll={onDownloadSeries} onClose={() => setPanel(null)} />
                 ) : (
                   detailBody()
                 )}
@@ -1676,6 +1742,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
         </div>
       )}
       <TagBlockMenu open={active && tagMenu} tags={meta.tags} onClose={() => setTagMenu(false)} onSettings={openPreferences} />
+      <DownloadSheet open={active && downloadOpen} onClose={() => setDownloadOpen(false)} />
       {!isDesktop && <MobileHoldGuide open={showHoldGuide} onClose={holdGuide.dismiss} target={holdTargetRef} bottomInset={bottomInset} />}
       {controlsLocked && <PlaybackLock active={active} onUnlock={() => { setControlsLocked(false); wake(); }} />}
     </div>

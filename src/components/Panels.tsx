@@ -8,28 +8,41 @@ import type { Comment, CommentPage, Episode } from "../types";
 import { useStore } from "../store";
 import { copyText } from "../clipboard";
 import { Avatar, Empty } from "./ui";
-import { IClose, IHeart, ISendF } from "../icons";
+import { IClose, IDownload, IHeart, ISendF } from "../icons";
 
 /* ================= 选集 ================= */
-export function EpisodesPanel({ videoId, episodes, current, onPick, onClose, bare = false }: {
+export function EpisodesPanel({ videoId, episodes, current, onPick, onClose, onDownloadAll, bare = false }: {
   videoId: number; episodes: Episode[]; current: number; onPick: (ep: number) => void; onClose: () => void;
+  onDownloadAll?: () => void;
   /** 嵌在双栏抽屉里时，隐藏自带的标题栏与底注 */
   bare?: boolean;
 }) {
   const [asc, setAsc] = useState(true);
   const list = asc ? episodes : [...episodes].reverse();
+  const downloadAllBtn = onDownloadAll && episodes.length > 0 ? (
+    <Button onClick={onDownloadAll} className="inline-flex items-center gap-1 px-2.5 h-7 rounded-full bg-s3 text-[12px] font-medium text-on pressable">
+      <IDownload size={13} className="text-primary" />
+      <span>下载全集</span>
+    </Button>
+  ) : null;
   return (
     <div className="flex flex-col h-full">
       {bare ? (
         <div className="shrink-0 flex items-center gap-2 px-4 pb-2">
           <span className="text-[12px] text-mut">共 {episodes.length} 集</span>
-          <Button onClick={() => setAsc((v) => !v)} className="ml-auto text-[12px] text-primary pressable">{asc ? "倒序" : "正序"}</Button>
+          <div className="ml-auto flex items-center gap-2">
+            {downloadAllBtn}
+            <Button onClick={() => setAsc((v) => !v)} className="text-[12px] text-primary pressable">{asc ? "倒序" : "正序"}</Button>
+          </div>
         </div>
       ) : (
         <div className="shrink-0 flex items-center gap-2 px-4 h-12">
           <span className="text-[14px] font-bold text-on">选集</span>
           <span className="text-[12px] text-mut">共 {episodes.length} 集</span>
-          <Button onClick={() => setAsc((v) => !v)} className="ml-auto text-[12px] text-primary pressable">{asc ? "倒序" : "正序"}</Button>
+          <div className="ml-auto flex items-center gap-2">
+            {downloadAllBtn}
+            <Button onClick={() => setAsc((v) => !v)} className="text-[12px] text-primary pressable">{asc ? "倒序" : "正序"}</Button>
+          </div>
           <Button onClick={onClose} aria-label="关闭" className="w-7 h-7 rounded-full bg-s3 flex items-center justify-center text-mut pressable">
             <IClose size={13} />
           </Button>
