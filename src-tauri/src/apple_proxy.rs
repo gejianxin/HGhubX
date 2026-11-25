@@ -3,7 +3,7 @@ use hyper_util::client::proxy::matcher::Matcher;
 
 pub(crate) fn routes_target(matcher: &Matcher, target: &str) -> bool {
     target
-        .parse::<tauri::http::Uri>()
+        .parse::<http::Uri>()
         .ok()
         .is_some_and(|uri| matcher.intercept(&uri).is_some())
 }

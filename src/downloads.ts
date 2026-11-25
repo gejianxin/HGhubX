@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { api, type DownloadTask } from "./api";
+import { listen } from "./bridge";
+import { api, type DownloadTask } from "./shared/api/api";
 
 type Snapshot = {
   tasks: DownloadTask[];

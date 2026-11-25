@@ -1,7 +1,7 @@
 [package]
 name = "hghubx"
-version = "2.1.2"
-description = "HGhubX client"
+version = "2.2.10"
+description = "HGhubX pure-Rust client"
 authors = ["HGhubX"]
 license = "PolyForm-Noncommercial-1.0.0"
 edition = "2021"
@@ -9,30 +9,24 @@ rust-version = "1.90"
 
 [lib]
 name = "hghubx_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
-[features]
-default = []
-# Tauri 2 打 iOS/桌面包时会把 custom-protocol 传给我们这个 crate；
-# 少了它 `tauri ios build` 直接报 “does not contain this feature”。
-custom-protocol = ["tauri/custom-protocol"]
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
+crate-type = ["rlib"]
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "=2.7.2"
-tauri-plugin-clipboard-manager = "=2.5.0"
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json", "query", "matched-path"] }
+http = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync", "io-util", "signal"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+rust-embed = "8"
+mime_guess = { version = "2", default-features = false }
+dirs = "6"
+open = "5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dom_query = { version = "=0.28.0", default-features = false }
 time = { version = "0.3", features = ["formatting"] }
-# 注意：system-proxy 必须显式列出。关掉 default-features 会连带丢掉它，
-# 客户端就不看 Windows/macOS 固定系统代理而直连，
-# 症状正是「浏览器能开官网、HGhubX 打不开」。见 src/net.rs 顶部说明。
+# 纯 Rust TLS + 加密：使用 rustls-rustcrypto 与 RustCrypto (p256/hkdf/aes-gcm/sha2) 替代 ring，零 C/C++ 依赖。
 reqwest = { version = "0.12", default-features = false, features = [
-  "rustls-tls",
+  "rustls-tls-webpki-roots-no-provider",
   "system-proxy",
   "socks",
   "gzip",
@@ -40,67 +34,18 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "charset",
 ] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync", "io-util"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-rustcrypto = "0.0.2-alpha"
 aes = "0.8"
+aes-gcm = "0.10"
+hkdf = "0.12"
+p256 = { version = "0.13", features = ["ecdh"] }
+sha2 = "0.10"
 base64 = "0.22"
 percent-encoding = "2"
 once_cell = "1"
 url = "2"
-
-# Tauri already uses this WebKitGTK version/features; reuse it to configure only
-# the app WebView's local-media transport (see linux_webview.rs).
-[target.'cfg(target_os = "linux")'.dependencies]
-webkit2gtk = { version = "2.0.2", features = ["v2_40"] }
-
-# 与 reqwest 使用同一个匹配器判断 Apple 平台的目标代理，避免诊断与实际路由不一致。
-# 此库和这些 feature 已由 reqwest 引入，不额外引入网络栈。
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 hyper-util = { version = "0.1.21", features = ["client-proxy", "client-proxy-system"] }
-
-[dev-dependencies]
-getrandom = "=0.3.4"
-hyper-util = { version = "0.1.21", features = ["client-proxy", "client-proxy-system"] }
-
-# macOS 红绿灯垂直居中需要读取 AppKit 按钮尺寸（见 src/macos_titlebar.rs）。
-# 三者均已是 tao/wry 的间接依赖，版本与 Cargo.lock 一致；只开启用到的 feature。
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = [
-  "std",
-  "NSButton",
-  "NSControl",
-  "NSGraphics",
-  "NSResponder",
-  "NSView",
-  "NSWindow",
-] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
-
-[target.'cfg(target_os = "ios")'.dependencies]
-getrandom = "=0.3.4"
-objc2 = "0.6"
-objc2-ui-kit = { version = "0.3", default-features = false, features = [
-  "std",
-  "objc2-core-foundation",
-  "UIResponder",
-  "UIView",
-  "UIScrollView",
-  "UIWindow",
-  "UIGeometry",
-] }
-objc2-web-kit = { version = "0.3", default-features = false, features = [
-  "std",
-  "WKWebViewConfiguration",
-  "WKPreferences",
-] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-# 读 HKCU Internet Settings 判断系统代理是否启用（只报 bool，地址交给 reqwest system-proxy）。
 winreg = "0.56"
-
-[profile.release]
-panic = "abort"
-codegen-units = 1
-lto = true
-opt-level = "s"
-strip = true

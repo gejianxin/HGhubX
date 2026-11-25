@@ -2,6 +2,7 @@
 //!
 //! 复用 [`crate::net::fetch_bytes`]，自动继承应用代理、备用 DNS 与严格网络策略。
 
+use crate::app_context::AppContext;
 use crate::net::fetch_bytes;
 use aes::cipher::{BlockDecrypt, KeyInit};
 use aes::Aes128;
@@ -14,8 +15,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_opener::OpenerExt;
 
 const DOWNLOAD_EVENT: &str = "download:progress";
 const MAX_CONCURRENT_TASKS: usize = 2;
@@ -67,13 +66,8 @@ fn next_task_id() -> String {
     format!("dl-{}-{n}", now_secs())
 }
 
-fn resolve_download_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let base = app
-        .path()
-        .download_dir()
-        .map(|dir| dir.join("HGhubX"))
-        .or_else(|_| app.path().app_data_dir().map(|dir| dir.join("downloads")))
-        .map_err(|e| format!("无法定位下载目录: {e}"))?;
+fn resolve_download_dir(ctx: &AppContext) -> Result<PathBuf, String> {
+    let base = ctx.download_dir.clone();
     fs::create_dir_all(&base).map_err(|e| format!("创建下载目录失败: {e}"))?;
     Ok(base)
 }
@@ -347,11 +341,11 @@ fn parse_playlist(base_url: &str, text: &str) -> Result<ParsedPlaylist, String> 
 
 /* ───────────────────────── 任务状态与执行 ───────────────────────── */
 
-fn emit_task(app: &AppHandle, task: &DownloadTask) {
-    let _ = app.emit(DOWNLOAD_EVENT, task);
+fn emit_task(ctx: &AppContext, task: &DownloadTask) {
+    ctx.emit(DOWNLOAD_EVENT, task);
 }
 
-fn update_task(app: &AppHandle, id: &str, mutate: impl FnOnce(&mut DownloadTask)) {
+fn update_task(ctx: &AppContext, id: &str, mutate: impl FnOnce(&mut DownloadTask)) {
     let snapshot = {
         let mut tasks = TASKS.lock().unwrap_or_else(|e| e.into_inner());
         let Some(entry) = tasks.iter_mut().find(|e| e.task.id == id) else {
@@ -360,7 +354,7 @@ fn update_task(app: &AppHandle, id: &str, mutate: impl FnOnce(&mut DownloadTask)
         mutate(&mut entry.task);
         entry.task.clone()
     };
-    emit_task(app, &snapshot);
+    emit_task(ctx, &snapshot);
 }
 
 async fn fetch_with_retry(url: &str, cancel: &AtomicBool) -> Result<(Option<String>, Vec<u8>), String> {
@@ -435,7 +429,7 @@ fn format_episode_label(ep: u32, total_hint: usize) -> String {
 }
 
 async fn run_download(
-    app: AppHandle,
+    app: Arc<AppContext>,
     id: String,
     target: DownloadTarget,
     title: String,
@@ -479,7 +473,7 @@ async fn run_download(
 }
 
 async fn run_download_inner(
-    app: &AppHandle,
+    app: &AppContext,
     id: &str,
     target: DownloadTarget,
     title: &str,
@@ -513,8 +507,7 @@ async fn run_download_inner(
             if cancel.load(Ordering::Acquire) {
                 return Err("下载已取消".into());
             }
-            let api_state: tauri::State<'_, crate::api::Api> = app.state();
-            let info = crate::api::resolve_play_info(&api_state, video_id, ep).await?;
+            let info = crate::api::video::resolve_play_info(&app.api, video_id, ep).await?;
             let resolved = pick_stream_url(&info, prefer_hevc)
                 .ok_or_else(|| format!("第 {ep} 集暂无可用播放地址"))?;
             crate::network_policy::parse_target(&resolved)?;
@@ -687,9 +680,8 @@ fn push_task_entry(task: DownloadTask, cancel: Arc<AtomicBool>) {
     }
 }
 
-#[tauri::command]
 pub async fn download_start(
-    app: AppHandle,
+    app: Arc<AppContext>,
     url: String,
     title: String,
     subtitle: Option<String>,
@@ -738,7 +730,7 @@ pub async fn download_start(
     let app_clone = app.clone();
     let task_id = id.clone();
     let title_clone = task.title.clone();
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         run_download(
             app_clone,
             task_id,
@@ -756,9 +748,8 @@ pub async fn download_start(
 
 /// 全套剧集下载：将所选全部集数按顺序入队，保存到 `下载目录/HGhubX/<剧名>/第 XX 集.ts`，
 /// 由后端信号量限流（最多同时下载 2 集）并在开跑前才按需解析该集播放地址，避免直链过期或打满上游。
-#[tauri::command]
 pub async fn download_series(
-    app: AppHandle,
+    app: Arc<AppContext>,
     video_id: i64,
     title: String,
     episodes: Vec<u32>,
@@ -836,7 +827,7 @@ pub async fn download_series(
         let task_id = id.clone();
         let title_clone = series_title.clone();
         let folder = Some(series_title.clone());
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             run_download(
                 app_clone,
                 task_id,
@@ -859,8 +850,7 @@ pub async fn download_series(
     Ok(created)
 }
 
-#[tauri::command]
-pub async fn download_cancel(app: AppHandle, id: String) -> Result<bool, String> {
+pub async fn download_cancel(app: &AppContext, id: String) -> Result<bool, String> {
     let snapshot = {
         let mut tasks = TASKS.lock().unwrap_or_else(|e| e.into_inner());
         let Some(entry) = tasks.iter_mut().find(|e| e.task.id == id) else {
@@ -874,12 +864,11 @@ pub async fn download_cancel(app: AppHandle, id: String) -> Result<bool, String>
         entry.task.error = None;
         entry.task.clone()
     };
-    emit_task(&app, &snapshot);
+    emit_task(app, &snapshot);
     Ok(true)
 }
 
-#[tauri::command]
-pub async fn download_cancel_all(app: AppHandle) -> Result<usize, String> {
+pub async fn download_cancel_all(app: &AppContext) -> Result<usize, String> {
     let cancelled: Vec<DownloadTask> = {
         let mut tasks = TASKS.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = Vec::new();
@@ -894,18 +883,16 @@ pub async fn download_cancel_all(app: AppHandle) -> Result<usize, String> {
         out
     };
     for task in &cancelled {
-        emit_task(&app, task);
+        emit_task(app, task);
     }
     Ok(cancelled.len())
 }
 
-#[tauri::command]
 pub async fn download_list() -> Result<Vec<DownloadTask>, String> {
     let tasks = TASKS.lock().unwrap_or_else(|e| e.into_inner());
     Ok(tasks.iter().map(|e| e.task.clone()).collect())
 }
 
-#[tauri::command]
 pub async fn download_remove(id: String) -> Result<bool, String> {
     let mut tasks = TASKS.lock().unwrap_or_else(|e| e.into_inner());
     let before = tasks.len();
@@ -920,18 +907,14 @@ pub async fn download_remove(id: String) -> Result<bool, String> {
     Ok(tasks.len() < before)
 }
 
-#[tauri::command]
-pub async fn download_dir(app: AppHandle) -> Result<String, String> {
-    let dir = resolve_download_dir(&app)?;
+pub async fn download_dir(app: &AppContext) -> Result<String, String> {
+    let dir = resolve_download_dir(app)?;
     Ok(dir.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
-pub async fn download_open_dir(app: AppHandle) -> Result<(), String> {
-    let dir = resolve_download_dir(&app)?;
-    app.opener()
-        .open_path(dir.to_string_lossy().as_ref(), None::<&str>)
-        .map_err(|e| format!("打开下载目录失败: {e}"))
+pub async fn download_open_dir(app: &AppContext) -> Result<(), String> {
+    let dir = resolve_download_dir(app)?;
+    open::that_detached(&dir).map_err(|e| format!("打开下载目录失败: {e}"))
 }
 
 #[cfg(test)]

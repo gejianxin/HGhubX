@@ -6,8 +6,11 @@ node_modules/
 dist/
 dist-ssr/
 test-results/
+target/
 src-tauri/target/
 src-tauri/gen/
+# Android TV 临时覆盖配置（由 build-android-tv.mjs / tv.yml 生成）
+src-tauri/tauri.android.conf.json
 *.local
 
 # 编辑器 / 系统
@@ -29,5 +32,5 @@ Thumbs.db
 # API
 docs/API.md
 
-# Agent instructions (local)
-AGENTS.md
+# Agent instructions: AGENTS.md is tracked. Keep machine-local variants out.
+AGENTS.local.md

@@ -15,7 +15,12 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node"]
+    "paths": {
+      "@tauri-apps/api/core": ["./src/bridge.ts"],
+      "@tauri-apps/api/event": ["./src/bridge.ts"],
+      "@tauri-apps/api/window": ["./src/bridge.ts"],
+      "@tauri-apps/plugin-clipboard-manager": ["./src/bridge.ts"]
+    }
   },
   "include": ["src"]
 }
