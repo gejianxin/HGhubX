@@ -8,7 +8,7 @@ import PlaybackLock from "./PlaybackLock";
 import VideoSurface, { type VideoHandle } from "./VideoSurface";
 import { useInlinePlayerFullscreen } from "./useInlinePlayerFullscreen";
 import "../../styles/post-player.css";
-import { ICompress, IExpand, ILockF, IPauseF, IPlayF, IVol, IVolMute } from "../../shared/ui/icons";
+import { ICompress, IDownload, IExpand, ILockF, IPauseF, IPlayF, IVol, IVolMute } from "../../shared/ui/icons";
 import { tr } from "../../shared/i18n";
 
 type Props = {
@@ -25,6 +25,8 @@ type Props = {
   onPlaying?: () => void;
   onTogglePlay?: (playing: boolean) => void;
   onToggleMute?: () => void;
+  onDownload?: () => void;
+  downloadLabel?: string;
   balanceVolume?: boolean;
   controls?: boolean;
   className?: string;
@@ -33,7 +35,7 @@ type Props = {
 
 export default function Player({
   src, scopeKey, poster, autoPlay, active = true, muted = false, volume = 1, loop = false, ambientGlow = false, balanceVolume = false, onEnded, onPlaying,
-  onTogglePlay, onToggleMute, controls = true, className = "", diagnosticContext = {},
+  onTogglePlay, onToggleMute, onDownload, downloadLabel = tr("下载"), controls = true, className = "", diagnosticContext = {},
 }: Props) {
   const surfaceRef = useRef<VideoHandle>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -184,6 +186,11 @@ export default function Player({
                   <ILockF size={16} />
                 </Button>
                 <Button onClick={cycleRate} aria-label={tr("播放速度 {0} 倍", rate)} className="text-[12px] font-bold text-white/85 pressable tabular-nums">{rate}x</Button>
+                {onDownload && (
+                  <Button onClick={onDownload} aria-label={downloadLabel} title={downloadLabel} className="pressable">
+                    <IDownload size={16} />
+                  </Button>
+                )}
                 <Button onClick={toggleFull} aria-label={full ? tr("退出全屏") : tr("全屏")} aria-pressed={full} className="pressable">
                   {full ? <ICompress size={16} /> : <IExpand size={16} />}
                 </Button>

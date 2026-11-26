@@ -1,6 +1,6 @@
 import { fmt } from "../../shared/api/api";
 import type { VideoCard } from "../../shared/api/types";
-import { IClose } from "../../shared/ui/icons";
+import { IClose, IDownload } from "../../shared/ui/icons";
 import { Button, Surface } from "../../shared/ui/ios/controls";
 import { Avatar, Img } from "../../shared/ui/ui";
 import { ContentTags } from "../../shared/ui/ContentTags";
@@ -16,9 +16,12 @@ type VideoMeta = {
 
 /** One details body for the mobile sheet and desktop dock. */
 export default function VideoDetailsPanel({ meta, videoId, episodeCount, related, following, followPending,
+  downloadLabel = tr("下载当前集"), onDownload, onDownloadAll,
   onFollow, onTag, onBlockTag, onAuthor, onRelated, onClose }: {
   meta: VideoMeta; videoId: number; episodeCount: number; related: VideoCard[];
-  following: boolean; followPending: boolean; onFollow: () => void; onTag: (tag: string) => void;
+  following: boolean; followPending: boolean;
+  downloadLabel?: string; onDownload?: () => void; onDownloadAll?: () => void;
+  onFollow: () => void; onTag: (tag: string) => void;
   onBlockTag?: (tag: string) => void;
   onAuthor: () => void; onRelated: (video: VideoCard, visible: VideoCard[]) => void; onClose?: () => void;
 }) {
@@ -39,6 +42,23 @@ export default function VideoDetailsPanel({ meta, videoId, episodeCount, related
           <div className="video-details-stats"><span>{tr("点赞 {0}", fmt(meta.like))}</span><span>{tr("收藏 {0}", fmt(meta.collect))}</span><span>{tr("评论 {0}", fmt(meta.comment))}</span></div>
         </div>
       </div>
+
+      {(onDownload || onDownloadAll) && (
+        <div className="flex flex-wrap gap-2">
+          {onDownload && (
+            <Button onClick={onDownload} className="flex-1 min-w-[120px] h-10 px-3 rounded-(--r-sm) bg-s3 text-[13px] font-semibold text-on inline-flex items-center justify-center gap-1.5 pressable">
+              <IDownload size={15} className="text-primary" />
+              <span>{downloadLabel === tr("下载") ? tr("下载当前集") : downloadLabel}</span>
+            </Button>
+          )}
+          {onDownloadAll && episodeCount > 1 && (
+            <Button onClick={onDownloadAll} className="flex-1 min-w-[120px] h-10 px-3 rounded-(--r-sm) bg-primary text-[13px] font-semibold text-on-primary inline-flex items-center justify-center gap-1.5 pressable">
+              <IDownload size={15} />
+              <span>{tr("下载全集 ({0})", episodeCount)}</span>
+            </Button>
+          )}
+        </div>
+      )}
 
       <section className="video-details-section" aria-label={tr("标签导航")}>
         <div className="video-details-section-heading"><h3>{tr("标签 · 点击查看同类{0}", onBlockTag ? tr(" · 长按屏蔽") : "")}</h3></div>

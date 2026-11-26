@@ -6,7 +6,7 @@ import type { Post } from "../../shared/api/types";
 import type { Toast } from "../../shared/model/store";
 import { PlaybackProgress, playbackLockRightInset, type PlaybackClock } from "../playback";
 import {
-  IBack, IChevR, IChevronDown, IChevronUp, IComment, IExpand, IFileText,
+  IBack, IChevR, IChevronDown, IChevronUp, IComment, IDownload, IExpand, IFileText,
   IHeart, IHeartF, IList, ILockF, IMore, IPlayF, IStar, IStarF, IVertSwap, IVol, IVolMute,
 } from "../../shared/ui/icons";
 import { CurrentVideoTags } from "./CurrentVideoTags";
@@ -72,6 +72,10 @@ type Props = {
   canStep: (dir: number) => boolean;
   onLike: () => Promise<void>;
   onFav: () => Promise<void>;
+  downloadLabel?: string;
+  downloadActive?: boolean;
+  onDownload?: () => void;
+  onDownloadSeries?: () => void;
   setPanel: Dispatch<SetStateAction<FeedPanel>>;
   openTag: (tag: string) => void;
   openTagMenu: (selected?: string[]) => void;
@@ -94,7 +98,8 @@ export default function FeedItemChrome({
   landscapeVideo, capsuleOn, zoom, setZoom,
   liked, collected, likePending, collectPending, heartBurst, likeCount, collectCount,
   paused, onTogglePlay, waiting, err, scrub, barRef, barPct, playbackClock,
-  onBack, enterFs, stepDir, canStep, onLike, onFav, setPanel, openTag, openTagMenu,
+  onBack, enterFs, stepDir, canStep, onLike, onFav, downloadLabel = tr("下载"), downloadActive = false, onDownload, onDownloadSeries,
+  setPanel, openTag, openTagMenu,
   muted, onToggleMuted, swipeEnabled, swipeEp, onToggleSwipe, onLock,
   onBarDown, onBarMove, onBarUp, onRetryStream, toast,
 }: Props) {
@@ -176,6 +181,10 @@ export default function FeedItemChrome({
             <IComment size={27} className="hg-ink hg-ov-shadow" />
             <span className="text-[12px] text-white/90 tabular-nums">{fmt(meta.comment)}</span>
           </Button>
+          <Button onClick={onDownload} className="mobile-action-download flex flex-col items-center gap-1 pressable" aria-label={downloadLabel}>
+            <IDownload size={26} className={downloadActive ? "hg-gold hg-ov-shadow" : "hg-ink hg-ov-shadow"} />
+            <span className="text-[12px] hg-ink-2 hg-ov-shadow tabular-nums" style={{ color: downloadActive ? "#f3c969" : undefined }}>{downloadLabel}</span>
+          </Button>
           <Button onClick={() => setPanel("more")} className="mobile-action-more flex flex-col items-center gap-1 pressable" aria-label={tr("更多播放设置")}>
             <IMore size={26} className="hg-ink hg-ov-shadow" />
             <span className="text-[12px] hg-ink-2 hg-ov-shadow">{tr("更多")}</span>
@@ -219,6 +228,11 @@ export default function FeedItemChrome({
               <span className="text-[12px] text-white/90">{tr("选集")}</span>
             </Button>
           )}
+
+          <Button onClick={onDownload} aria-label={downloadLabel} className="flex flex-col items-center gap-1 pressable">
+            <IDownload size={25} className={downloadActive ? "hg-gold tsh" : "text-white tsh"} />
+            <span className="text-[12px] text-white/90 tabular-nums" style={{ color: downloadActive ? "#f3c969" : undefined }}>{downloadLabel}</span>
+          </Button>
         </div>
       )}
 
@@ -249,6 +263,16 @@ export default function FeedItemChrome({
           <div className="mt-2 flex flex-wrap gap-2">
             <Button aria-label={tr("视频详情")} onClick={() => setPanel("detail")} className="min-h-11 px-4 rounded-full hg-chip text-[12px] inline-flex items-center gap-1">{tr("详情与标签")}<IChevR size={13} />
             </Button>
+            <Button aria-label={downloadLabel} onClick={onDownload} className="min-h-11 px-3.5 rounded-full hg-chip text-[12px] inline-flex items-center gap-1.5 tabular-nums pressable">
+              <IDownload size={14} className={downloadActive ? "hg-gold" : undefined} />
+              <span>{downloadLabel}</span>
+            </Button>
+            {kind === "video" && episodes.length > 1 && (
+              <Button aria-label={tr("下载全集 ({0})", episodes.length)} onClick={onDownloadSeries} className="min-h-11 px-3.5 rounded-full hg-chip text-[12px] inline-flex items-center gap-1.5 pressable">
+                <IDownload size={14} />
+                <span>{tr("下载全集 ({0})", episodes.length)}</span>
+              </Button>
+            )}
           </div>
         </div>
       )}

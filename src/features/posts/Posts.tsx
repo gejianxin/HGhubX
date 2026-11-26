@@ -8,7 +8,9 @@ import { useStore } from "../../shared/model/store";
 import { copyText } from "../../shared/lib/clipboard";
 import { Empty, Img, Sheet } from "../../shared/ui/ui";
 import { Player } from "../playback";
-import { IBack, ICommentF, IFireF, IFlame, IHeart, IHeartF, IPlayF, ISearch, IStar, IStarF } from "../../shared/ui/icons";
+import DownloadSheet from "../../shared/ui/DownloadSheet";
+import { downloadProgressPct, findTaskByUrl, startDownload, useDownloads } from "../../downloads";
+import { IBack, ICommentF, IDownload, IFireF, IFlame, IHeart, IHeartF, IPlayF, ISearch, IStar, IStarF } from "../../shared/ui/icons";
 import { handleArticleClick, parseInternalVideoId, sanitizeHtml } from "../../shared/lib/html";
 import { InplaceSearch } from "../search/InplaceSearch";
 import { FilteredContent } from "../../shared/ui/FilteredContent";
@@ -197,6 +199,32 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reload, mediaRetry, allowed, lineEpoch, accountScope]);
 
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
+  const currentDownload = findTaskByUrl(downloadTasks, src);
+  const currentDownloadActive = currentDownload?.status === "queued" || currentDownload?.status === "downloading";
+  const currentDownloadDone = currentDownload?.status === "done";
+  const downloadLabel = currentDownloadActive && currentDownload
+    ? `${downloadProgressPct(currentDownload)}%`
+    : currentDownloadDone ? tr("已下载") : tr("下载");
+  const onDownload = () => {
+    if (currentDownloadActive || currentDownloadDone) {
+      setDownloadOpen(true);
+      return;
+    }
+    if (!src) {
+      toast(tr("暂无可下载视频"), "info");
+      return;
+    }
+    void startDownload({
+      url: src,
+      title: currentPost?.title || `帖子 ${id}`,
+      subtitle: segs.length > 1 ? `分段 ${seg + 1}` : undefined,
+    })
+      .then(() => toast(tr("已开始下载，点击按钮可查看进度"), "ok"))
+      .catch((e) => toast(e instanceof Error ? e.message : tr("启动下载失败"), "info"));
+  };
+
   // Keep blocked content out of the surface while the host navigates back.
   if (currentPost && blocked) return <div className="absolute inset-0 flex items-center justify-center bg-bg" aria-label={tr("正在返回")}>
     <Loader className="w-8 h-8 spinner" />
@@ -208,7 +236,15 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
         <div className="ios-subpage-bar">
           <Button aria-label={tr("返回")} onClick={onBack} className="ios-nav-btn"><IBack size={20} /></Button>
           <span className="text-[16px] font-bold text-on">{tr("吃瓜详情")}</span>
-          <Button disabled={!currentPost} onClick={() => { if (active && allowed) setTagMenu(true); }} className="ml-auto -mr-2 px-2.5 min-h-9 inline-flex items-center justify-end text-[13px] font-medium text-primary">{tr("不感兴趣")}</Button>
+          <div className="ml-auto flex items-center gap-1">
+            {src && (
+              <Button onClick={onDownload} aria-label={downloadLabel} className="px-2.5 min-h-9 inline-flex items-center gap-1 text-[13px] font-medium text-primary tabular-nums pressable">
+                <IDownload size={15} />
+                <span>{downloadLabel}</span>
+              </Button>
+            )}
+            <Button disabled={!currentPost} onClick={() => { if (active && allowed) setTagMenu(true); }} className="-mr-2 px-2.5 min-h-9 inline-flex items-center justify-end text-[13px] font-medium text-primary">{tr("不感兴趣")}</Button>
+          </div>
         </div>
       </div>
 
@@ -228,7 +264,8 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
               {play && src ? (
                 <Player src={src} scopeKey={id} poster={cover(currentPost.cover)} autoPlay active={active && !tagMenu && !commentsOpen} controls muted={muted} volume={volume}
                   ambientGlow={ambientGlow} balanceVolume={isMobile && balanceVolume}
-                  onToggleMute={() => setMuted((m) => !m)} diagnosticContext={{ video_id: id, active: active && !tagMenu && !commentsOpen }} className="w-full h-full"
+                  onToggleMute={() => setMuted((m) => !m)} onDownload={onDownload} downloadLabel={downloadLabel}
+                  diagnosticContext={{ video_id: id, active: active && !tagMenu && !commentsOpen }} className="w-full h-full"
                   onEnded={() => {
                     /* 多段吃瓜视频：播完自动接下一段；末段保留播放器以便回拖或重看 */
                     if (seg < segs.length - 1) setSeg(seg + 1);
@@ -304,6 +341,12 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
                       <ICommentF size={14} />
                       <span>{currentPost.counts?.comment ? fmt(currentPost.counts.comment) : tr("评论")}</span>
                     </Button>
+                    {src && (
+                      <Button onClick={onDownload} className="h-9 px-3.5 rounded-full bg-s2 flex items-center gap-1.5 text-[13px] text-on pressable tabular-nums">
+                        <IDownload size={14} className={currentDownloadActive || currentDownloadDone ? "text-primary" : undefined} />
+                        <span>{downloadLabel}</span>
+                      </Button>
+                    )}
                   </>;
                 })()}
               </div>
@@ -322,6 +365,7 @@ export function PostDetail({ id, onBack, active = true }: { id: number; onBack: 
         </div>
       </Sheet>
       <TagBlockMenu open={tagMenu && active} tags={currentPost?.tags || []} onClose={() => setTagMenu(false)} onSettings={() => push({ kind: "settings", section: "内容偏好" })} />
+      <DownloadSheet open={downloadOpen && active} onClose={() => setDownloadOpen(false)} />
     </div>
   );
 }

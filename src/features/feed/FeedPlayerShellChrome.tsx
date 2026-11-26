@@ -5,6 +5,7 @@ import { fmtTime } from "../../shared/api/api";
 import type { Episode, Post, VideoCard } from "../../shared/api/types";
 import type { PageInput, Toast } from "../../shared/model/store";
 import { Sheet } from "../../shared/ui/ui";
+import DownloadSheet from "../../shared/ui/DownloadSheet";
 import { PlaybackProgress, PlaybackTime, PlayerControls, type PlaybackClock, type VideoHandle } from "../playback";
 import type { FeedMeta } from "./useFeedActions";
 import type { FeedPanel } from "./useFeedViewport";
@@ -73,6 +74,12 @@ type Props = {
   articleHtml: string;
   panel: FeedPanel;
   setPanel: Dispatch<SetStateAction<FeedPanel>>;
+  downloadLabel?: string;
+  downloadActive?: boolean;
+  downloadOpen?: boolean;
+  setDownloadOpen?: Dispatch<SetStateAction<boolean>>;
+  onDownload?: () => void;
+  onDownloadSeries?: () => void;
   scrub: { pct: number; target: number } | null;
   barPct: number | null;
   onBarDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
@@ -99,6 +106,7 @@ export function FeedPlayerShellChrome({
   muted, setMuted, volume, setVolume, swipeEp, setSwipeEp, preferHevc, setPreferHevc, portraitFit, setPortraitFit,
   playKey, curId, curEp, index, effectiveLength, kind, meta, likeCount, collectCount, episodes, related,
   follows, followPending, post, articleHtml, panel, setPanel,
+  downloadLabel = tr("下载"), downloadActive = false, downloadOpen = false, setDownloadOpen, onDownload, onDownloadSeries,
   scrub, barPct, onBarDown, onBarMove, onBarUp,
   pickEp, go, togglePip, lockControls, toggleFull, exitFs,
   onFollow, openTag, openTagMenu, closePanels, pushPage, toast,
@@ -113,6 +121,7 @@ export function FeedPlayerShellChrome({
   const detailBody = (onClose?: () => void) => (
     <VideoDetailsPanel meta={liveMeta} videoId={curId} episodeCount={episodes.length}
       related={related} following={follows.includes(meta.authorId)} followPending={followPending}
+      downloadLabel={downloadLabel} onDownload={onDownload} onDownloadAll={kind === "video" && episodes.length > 1 ? onDownloadSeries : undefined}
       onFollow={() => void onFollow()} onTag={openTag} onBlockTag={tag => openTagMenu([tag])} onClose={onClose}
       onAuthor={() => { if (meta.authorId > 0) { closePanels(); pushPage({ kind: "user", id: meta.authorId, name: meta.author }); } }}
       onRelated={(video, visible) => { closePanels(); pushPage({ kind: "feed", videoIds: visible.map(item => item.id), index: visible.findIndex(item => item.id === video.id), title: tr("相关推荐") }); }} />
@@ -133,6 +142,9 @@ export function FeedPlayerShellChrome({
           nextDisabled={!(swipeEp && episodes.some((e) => e.ep_num === curEp + 1)) && index >= effectiveLength - 1}
           nextTitle={swipeEp && episodes.some((e) => e.ep_num === curEp + 1) ? tr("下一集 ↓") : tr("下一部 ↓")}
           swipeEp={swipeEp}
+          downloadLabel={downloadLabel}
+          downloadActive={downloadActive}
+          onDownload={onDownload}
           onToggleSwipe={() => { const next = !swipeEp; setSwipeEp(next); toast(next ? tr("上下划切集已开启") : tr("上下划切集已关闭"), "info", "playback-hint"); }}
           onToggle={() => videoRef.current?.toggle()}
           onSeek={(t, source) => { videoRef.current?.seek(t, source); playbackClock.publish(t); }}
@@ -269,7 +281,7 @@ export function FeedPlayerShellChrome({
           <div className="desktop-dock-inner">
             <Suspense fallback={<PanelFallback />}>
               {panel === "detail" ? detailBody(() => setPanel(null)) : panel === "episodes" ? (
-                <EpisodesPanel videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onClose={() => setPanel(null)} />
+                <EpisodesPanel videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onDownloadAll={onDownloadSeries} onClose={() => setPanel(null)} />
               ) : panel === "comments" ? (
                 <CommentsPanel videoId={curId} ep={curEp} total={meta.comment} kind={kind} onClose={() => setPanel(null)} />
               ) : null}
@@ -327,7 +339,7 @@ export function FeedPlayerShellChrome({
                 <PanelSwipeArea panel={panel} onChange={setPanel}>
                   <Suspense fallback={<PanelFallback />}>
                     {panel === "episodes" ? (
-                      <EpisodesPanel bare videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onClose={() => setPanel(null)} />
+                      <EpisodesPanel bare videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onDownloadAll={onDownloadSeries} onClose={() => setPanel(null)} />
                     ) : detailBody()}
                   </Suspense>
                 </PanelSwipeArea>
@@ -336,6 +348,7 @@ export function FeedPlayerShellChrome({
           </Sheet>
         </>
       )}
+      <DownloadSheet open={active && downloadOpen} onClose={() => setDownloadOpen?.(false)} />
     </>
   );
 }

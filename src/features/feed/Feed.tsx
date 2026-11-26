@@ -22,6 +22,7 @@ import { useFeedTouchGestures } from "./useFeedTouchGestures";
 import { useFeedActions, type FeedMeta } from "./useFeedActions";
 import FeedItemChrome from "./FeedItemChrome";
 import { FeedMobileTopTools, FeedPlayerShellChrome } from "./FeedPlayerShellChrome";
+import { downloadProgressPct, findTaskByUrl, startDownload, startSeriesDownload, useDownloads } from "../../downloads";
 import { tr } from "../../shared/i18n";
 
 type Props = {
@@ -338,6 +339,62 @@ export default function Feed({
 
   const posterUrl = cover(meta.cover, 900);
   const articleHtml = kind === "post" && !post?.video_url ? (post?.content || "") : "";
+
+  /* 下载当前视频 / 全套剧集 */
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
+  const currentDownload = findTaskByUrl(downloadTasks, playUrl);
+  const currentDownloadActive = currentDownload?.status === "queued" || currentDownload?.status === "downloading";
+  const currentDownloadDone = currentDownload?.status === "done";
+  const downloadLabel = currentDownloadActive && currentDownload
+    ? `${downloadProgressPct(currentDownload)}%`
+    : currentDownloadDone ? tr("已下载") : tr("下载");
+  const downloadActive = !!(currentDownloadActive || currentDownloadDone);
+  const onDownload = () => {
+    if (currentDownloadActive || currentDownloadDone) {
+      setDownloadOpen(true);
+      return;
+    }
+    if (!playUrl) {
+      toast(tr("视频地址尚未加载完成，请稍候重试"), "info");
+      return;
+    }
+    const epTag = episodes.length > 1 ? `第 ${curEp} 集` : "";
+    const hdTag = preferHevc && hevcUrl ? "HD" : "";
+    const subtitle = [epTag, hdTag].filter(Boolean).join(" ");
+    void startDownload({
+      url: playUrl,
+      title: meta.title || `视频 ${curId}`,
+      subtitle: subtitle || undefined,
+    })
+      .then(() => {
+        toast(tr("已开始下载，点击下载按钮可查看进度"), "ok");
+      })
+      .catch((e) => {
+        toast(e instanceof Error ? e.message : tr("启动下载失败"), "info");
+      });
+  };
+  const onDownloadSeries = () => {
+    const epNums = episodes.map((e) => e.ep_num).filter((n) => n > 0);
+    if (!curId || !epNums.length) {
+      toast(tr("暂无可下载的剧集"), "info");
+      return;
+    }
+    void startSeriesDownload({
+      videoId: curId,
+      title: meta.title || `视频 ${curId}`,
+      episodes: epNums,
+      preferHevc,
+    })
+      .then((tasks) => {
+        toast(tr("已将全套 {0} 集加入下载队列", tasks.length), "ok");
+        setPanel(null);
+        setDownloadOpen(true);
+      })
+      .catch((e) => {
+        toast(e instanceof Error ? e.message : tr("全集下载启动失败"), "info");
+      });
+  };
 
   /* 沉浸全屏 + 横屏视频 → 舞台旋转 90°，看起来就是横屏 */
   const rotated = !isDesktop && fs && videoSize.w > videoSize.h && videoSize.h > 0 && !vpLandscape;
@@ -709,7 +766,9 @@ export default function Feed({
                   heartBurst={heartBurst} likeCount={likeCount} collectCount={collectCount}
                   paused={paused} onTogglePlay={togglePlayback} waiting={waiting} err={err} scrub={scrub} barRef={barRef} barPct={barPct}
                   playbackClock={playbackClock} onBack={onBack} enterFs={enterFs} stepDir={stepDir} canStep={canStep}
-                  onLike={onLike} onFav={onFav} setPanel={setPanel} openTag={openTag} openTagMenu={openTagMenu}
+                  onLike={onLike} onFav={onFav} downloadLabel={downloadLabel} downloadActive={downloadActive}
+                  onDownload={onDownload} onDownloadSeries={onDownloadSeries}
+                  setPanel={setPanel} openTag={openTag} openTagMenu={openTagMenu}
                   muted={muted} onToggleMuted={() => setMuted(value => !value)}
                   swipeEnabled={kind === "video" && episodes.length > 1} swipeEp={swipeEp} onToggleSwipe={toggleSwipeEp}
                   onLock={lockControls}
@@ -737,6 +796,8 @@ export default function Feed({
           kind={kind} meta={meta} likeCount={likeCount} collectCount={collectCount}
           episodes={episodes} related={related} follows={store.follows} followPending={followPending}
           post={post} articleHtml={articleHtml} panel={panel} setPanel={setPanel}
+          downloadLabel={downloadLabel} downloadActive={downloadActive} downloadOpen={downloadOpen}
+          setDownloadOpen={setDownloadOpen} onDownload={onDownload} onDownloadSeries={onDownloadSeries}
           scrub={scrub} barPct={barPct} onBarDown={onBarDown} onBarMove={onBarMove} onBarUp={onBarUp}
           pickEp={pickEp} go={go} togglePip={togglePip} lockControls={lockControls} toggleFull={toggleFull} exitFs={exitFs}
           onFollow={onFollow} openTag={openTag} openTagMenu={openTagMenu} closePanels={closePanels} pushPage={store.push} toast={toast}

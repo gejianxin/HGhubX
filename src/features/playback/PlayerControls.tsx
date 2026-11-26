@@ -2,7 +2,7 @@ import { Button, Input } from "../../shared/ui/ios/controls";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { fmtTime } from "../../shared/api/api";
 import { useSeekInput } from "./useSeekInput";
-import { ICheck, ICompress, IExpand, ILockF, INext, IPauseF, IPip, IPlayF, ITheater, IVertSwap, IVol, IVolMute } from "../../shared/ui/icons";
+import { ICheck, ICompress, IDownload, IExpand, ILockF, INext, IPauseF, IPip, IPlayF, ITheater, IVertSwap, IVol, IVolMute } from "../../shared/ui/icons";
 import type { PlaybackClock } from "./playbackClock";
 import { tr } from "../../shared/i18n";
 
@@ -23,6 +23,8 @@ type Props = {
   nextDisabled?: boolean;
   nextTitle?: string;
   swipeEp?: boolean;
+  downloadLabel?: string;
+  downloadActive?: boolean;
   onToggle: () => void;
   onSeek: (t: number, source?: string) => void;
   onSeekInteraction?: (phase: string, input: string, target: number, pointerTarget?: number) => void;
@@ -31,6 +33,7 @@ type Props = {
   onVolume: (v: number) => void;
   onPip: () => void;
   onLock: () => void;
+  onDownload?: () => void;
   onTheater?: () => void;
   onFullscreen: () => void;
   onNext?: () => void;
@@ -41,7 +44,9 @@ const formatClock = (s: number) => fmtTime(Math.max(0, s || 0)).padStart(5, "0")
 
 export default function PlayerControls({
   paused, clock, duration, buffered = 0, rate, muted, volume, theater = false, fullscreen = false, dockInset = 0,
-  visible = true, seekEnabled = true, seekKey, nextDisabled = false, nextTitle = tr("下一个"), swipeEp = false, onToggle, onSeek, onSeekInteraction, onRate, onMute, onVolume, onPip, onLock, onTheater, onFullscreen, onNext, onToggleSwipe,
+  visible = true, seekEnabled = true, seekKey, nextDisabled = false, nextTitle = tr("下一个"), swipeEp = false,
+  downloadLabel = tr("下载"), downloadActive = false,
+  onToggle, onSeek, onSeekInteraction, onRate, onMute, onVolume, onPip, onLock, onDownload, onTheater, onFullscreen, onNext, onToggleSwipe,
 }: Props) {
   const [speedOpen, setSpeedOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -141,6 +146,11 @@ export default function PlayerControls({
               onChange={(e) => onVolume(Number(e.target.value))} />
           </div>
         </div>
+        {onDownload && (
+          <Button className={`player-control ${downloadActive ? "is-on" : ""}`} aria-label={downloadLabel} data-tooltip={downloadLabel} onClick={onDownload}>
+            <IDownload size={18} strokeWidth={1.7} />
+          </Button>
+        )}
         <Button className="player-control" aria-label={tr("画中画")} data-tooltip={tr("画中画")} onClick={onPip}><IPip size={20} strokeWidth={1.6} /></Button>
         <Button className="player-control" aria-label={tr("锁定播放控制")} aria-pressed={false} data-tooltip={tr("锁定播放控制")} onClick={onLock}><ILockF size={18} /></Button>
         {!fullscreen && onTheater && (

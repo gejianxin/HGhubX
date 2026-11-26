@@ -1,17 +1,22 @@
+import { useState } from "react";
 import { Button } from "../../shared/ui/ios/controls";
 import { useStore, type Tab } from "../../shared/model/store";
 import { APP_VERSION } from "../../shared/api/api";
 import { Avatar } from "../../shared/ui/ui";
+import DownloadSheet from "../../shared/ui/DownloadSheet";
+import { useDownloads } from "../../downloads";
 import {
-  IGrid, IGridF, IHome, IHomeF, IMoon, ISearch, ISettings, ISidebar,
+  IDownload, IGrid, IGridF, IHome, IHomeF, IMoon, ISearch, ISettings, ISidebar,
   ISun, ITrophy, IUser, IUserF, Logo,
 } from "../../shared/ui/icons";
 import { tr } from "../../shared/i18n";
 
 export function DesktopTitleBar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { theme, setTheme, setTab, theater, setTheater } = useStore();
+  const [downloadOpen, setDownloadOpen] = useState(false);
 
   return (
+    <>
     <header className="win-titlebar">
       <div className="win-wordmark">
         <Logo size={24} />
@@ -22,6 +27,9 @@ export function DesktopTitleBar({ collapsed, onToggle }: { collapsed: boolean; o
         <ISidebar size={17} strokeWidth={1.7} />
       </Button>
       <div className="win-drag-region" />
+      <Button className="win-caption-tool" aria-label={tr("下载管理")} title={tr("下载管理")} onClick={() => setDownloadOpen(true)}>
+        <IDownload size={17} strokeWidth={1.7} />
+      </Button>
       <Button className="win-caption-tool" aria-label={tr("切换外观")} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
         {theme === "dark" ? <ISun size={17} strokeWidth={1.7} /> : <IMoon size={17} strokeWidth={1.7} />}
       </Button>
@@ -29,11 +37,16 @@ export function DesktopTitleBar({ collapsed, onToggle }: { collapsed: boolean; o
         <ISearch size={17} strokeWidth={1.7} />
       </Button>
     </header>
+    <DownloadSheet open={downloadOpen} onClose={() => setDownloadOpen(false)} />
+    </>
   );
 }
 
 export function DesktopRail({ collapsed }: { collapsed: boolean }) {
   const { tab, setTab, user, setLoginOpen, openRootPage, platform, stack } = useStore();
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const { tasks: downloadTasks } = useDownloads();
+  const activeDownloads = downloadTasks.filter((t) => t.status === "queued" || t.status === "downloading").length;
   /* 从侧栏进入的栈页（排行榜 / 设置）接管高亮，否则「我的」会一直亮着，看起来不像独立页面 */
   const root = stack[0];
   const railPage: "ranks" | "settings" | null =
@@ -45,6 +58,7 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
     { key: "profile", label: tr("我的"), Icon: IUser, Filled: IUserF },
   ];
   return (
+    <>
     <nav className={`win-sidebar ${collapsed ? "is-compact" : ""}`} aria-label={tr("主导航")}>
       <div className="win-sidebar-inner">
         <Button className={`win-search-launch ${onTab("search") ? "is-selected" : ""}`}
@@ -68,6 +82,10 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
             <span className="win-nav-symbol"><ITrophy size={21} strokeWidth={1.7} /></span>
             <span className="win-nav-copy">{tr("排行榜")}</span>
           </Button>
+          <Button aria-label={tr("下载管理")} className="win-nav-item" onClick={() => setDownloadOpen(true)}>
+            <span className="win-nav-symbol"><IDownload size={20} strokeWidth={1.7} /></span>
+            <span className="win-nav-copy">{activeDownloads > 0 ? `${tr("下载")} (${activeDownloads})` : tr("下载")}</span>
+          </Button>
           <Button aria-label={tr("设置")} className={`win-nav-item ${railPage === "settings" ? "is-selected" : ""}`}
             aria-current={railPage === "settings" ? "page" : undefined}
             onClick={() => { if (railPage !== "settings" || stack.length > 1) openRootPage({ kind: "settings" }); }}>
@@ -86,5 +104,7 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
         </div>
       </div>
     </nav>
+    <DownloadSheet open={downloadOpen} onClose={() => setDownloadOpen(false)} />
+    </>
   );
 }
